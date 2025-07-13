@@ -542,12 +542,36 @@ body {
 
 .preview-placeholder {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
   color: #6a9955;
   font-style: italic;
   font-size: 14px;
+  text-align: center;
+  padding: 2rem;
+}
+
+.react-notice {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #2d2d30;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  color: #d4d4d4;
+  font-style: normal;
+  text-align: left;
+}
+
+.react-notice p {
+  margin: 0.5rem 0;
+  font-size: 13px;
+}
+
+.react-notice p:first-child {
+  color: #ffcc00;
+  font-weight: 500;
 }
 
 .code-panel pre {
@@ -677,6 +701,27 @@ body {
   color: #ce9178 !important;
 }
 
+/* JSX/React specific syntax highlighting */
+.code-panel pre code .token.tag.language-jsx,
+.code-panel .token.tag.language-jsx {
+  color: #569cd6 !important;
+}
+
+.code-panel pre code .token.attr-name.language-jsx,
+.code-panel .token.attr-name.language-jsx {
+  color: #9cdcfe !important;
+}
+
+.code-panel pre code .token.attr-value.language-jsx,
+.code-panel .token.attr-value.language-jsx {
+  color: #ce9178 !important;
+}
+
+.code-panel pre code .token.keyword.language-jsx,
+.code-panel .token.keyword.language-jsx {
+  color: #569cd6 !important;
+}
+
 /* Ensure preview content has proper styling */
 .preview-content pre code {
   background: #1e1e1e !important;
@@ -794,4 +839,116 @@ body {
 .code-panel::-webkit-scrollbar-thumb:hover,
 .preview-content::-webkit-scrollbar-thumb:hover {
   background: #4f4f4f;
+}
+
+/* ---------- THINK FEATURE STYLES ---------- */
+.think-container {
+  margin: 0.5rem 0;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8f9fa;
+}
+
+.think-toggle {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: #f1f3f4;
+  border: none;
+  border-bottom: 1px solid #e1e4e8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #586069;
+  transition: background-color 0.2s ease;
+}
+
+.think-toggle:hover {
+  background: #e8eaed;
+}
+
+.think-toggle:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.2);
+}
+
+.think-icon {
+  font-size: 1rem;
+  opacity: 0.7;
+}
+
+.think-text {
+  flex: 1;
+  text-align: left;
+  font-weight: 500;
+}
+
+.think-arrow {
+  font-size: 0.8rem;
+  transition: transform 0.2s ease;
+  opacity: 0.7;
+}
+
+.think-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+
+.think-content {
+  padding: 1rem;
+  background: #fafbfc;
+  border-top: 1px solid #e1e4e8;
+}
+
+.think-text-content {
+  color: #586069;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.think-text-content p {
+  margin-bottom: 0.5rem;
+}
+
+.think-text-content p:last-child {
+  margin-bottom: 0;
+}
+
+.streaming-cursor {
+  animation: cursor-blink 1s infinite;
+  color: #586069;
+  font-weight: bold;
+}
+
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Dark theme adjustments for think feature */
+@media (prefers-color-scheme: dark) {
+  .think-container {
+    border-color: #30363d;
+    background: #21262d;
+  }
+  
+  .think-toggle {
+    background: #30363d;
+    border-bottom-color: #30363d;
+    color: #c9d1d9;
+  }
+  
+  .think-toggle:hover {
+    background: #3c4148;
+  }
+  
+  .think-content {
+    background: #1c2128;
+    border-top-color: #30363d;
+  }
+  
+  .think-text-content {
+    color: #8b949e;
+  }
 }

@@ -6,6 +6,160 @@ import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-jsx';
 import 'prismjs/components/prism-markup';
 import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-python';
+import 'prismjs/components/prism-java';
+import 'prismjs/components/prism-c';
+import 'prismjs/components/prism-cpp';
+import 'prismjs/components/prism-php';
+import 'prismjs/components/prism-ruby';
+import 'prismjs/components/prism-sql';
+import 'prismjs/components/prism-bash';
+import 'prismjs/components/prism-json';
+import 'prismjs/components/prism-yaml';
+
+// Think component for collapsible reasoning
+const Think = ({ children, isCollapsed, onToggle }) => {
+  return (
+    <div className="think-container">
+      <button 
+        className="think-toggle" 
+        onClick={onToggle}
+        title={isCollapsed ? "Show reasoning" : "Hide reasoning"}
+      >
+        <span className="think-icon">🧠</span>
+        <span className="think-text">
+          {isCollapsed ? "Show reasoning" : "Hide reasoning"}
+        </span>
+        <span className={`think-arrow ${isCollapsed ? 'collapsed' : ''}`}>▼</span>
+      </button>
+      {!isCollapsed && (
+        <div className="think-content">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Component to render message content with think blocks
+const MessageContent = ({ content, isStreaming = false }) => {
+  const [collapsedThinks, setCollapsedThinks] = useState(new Set());
+
+  const toggleThink = (index) => {
+    setCollapsedThinks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  // Handle streaming think blocks (incomplete think tags)
+  const renderContent = () => {
+    const parts = [];
+    let currentIndex = 0;
+    let inThinkBlock = false;
+    let thinkContent = '';
+    let regularContent = '';
+    
+    // Process content character by character to handle incomplete think tags
+    let i = 0;
+    while (i < content.length) {
+      if (content.substring(i, i + 7) === '<think>') {
+        // Start of think block
+        if (regularContent.trim()) {
+          parts.push({
+            type: 'regular',
+            content: regularContent.trim(),
+            index: currentIndex++
+          });
+          regularContent = '';
+        }
+        inThinkBlock = true;
+        i += 7;
+      } else if (content.substring(i, i + 8) === '</think>') {
+        // End of think block
+        if (thinkContent.trim()) {
+          parts.push({
+            type: 'think',
+            content: thinkContent.trim(),
+            index: currentIndex++
+          });
+        }
+        inThinkBlock = false;
+        thinkContent = '';
+        i += 8;
+      } else {
+        // Regular character
+        if (inThinkBlock) {
+          thinkContent += content[i];
+        } else {
+          regularContent += content[i];
+        }
+        i++;
+      }
+    }
+    
+    // Handle any remaining content
+    if (inThinkBlock && thinkContent.trim()) {
+      // Incomplete think block (still streaming)
+      parts.push({
+        type: 'think',
+        content: thinkContent.trim(),
+        index: currentIndex++,
+        isIncomplete: true
+      });
+    } else if (regularContent.trim()) {
+      parts.push({
+        type: 'regular',
+        content: regularContent.trim(),
+        index: currentIndex++
+      });
+    }
+    
+    return parts;
+  };
+
+  const contentParts = renderContent();
+  
+  return (
+    <div className="message-content">
+      {contentParts.map((part) => {
+        if (part.type === 'think') {
+          return (
+            <Think
+              key={part.index}
+              isCollapsed={collapsedThinks.has(part.index)}
+              onToggle={() => toggleThink(part.index)}
+            >
+              <div className="think-text-content">
+                {part.content.split('\n').map((line, i) => (
+                  <p key={i}>
+                    {line}
+                    {part.isIncomplete && i === part.content.split('\n').length - 1 && (
+                      <span className="streaming-cursor">|</span>
+                    )}
+                  </p>
+                ))}
+              </div>
+            </Think>
+          );
+        } else {
+          return (
+            <div key={part.index}>
+              {part.content.split('\n').map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
+          );
+        }
+      })}
+    </div>
+  );
+};
 
 const SAMPLE_CODE = `// Example snippet shown on the right‑hand side
 fetch(\`\${ollamaUrl}/api/chat\`, {
@@ -38,6 +192,7 @@ function App() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewCss, setPreviewCss] = useState('');
+  const [previewReact, setPreviewReact] = useState('');
   const [activePreviewTab, setActivePreviewTab] = useState('preview');
   const messagesEndRef = useRef(null);
 
@@ -45,7 +200,13 @@ function App() {
     // Only highlight code in the main code panel, not in preview
     const codeElements = document.querySelectorAll('.code-panel pre code:not(.preview-content code)');
     codeElements.forEach(element => {
-      Prism.highlightElement(element);
+      try {
+        Prism.highlightElement(element);
+      } catch (error) {
+        console.warn('Prism highlighting failed:', error);
+        // Fallback to plain text if highlighting fails
+        element.className = 'language-plaintext';
+      }
     });
   }, [code, streamingCode]);
 
@@ -54,7 +215,13 @@ function App() {
     if (showPreview) {
       const previewCodeElements = document.querySelectorAll('.preview-content pre code');
       previewCodeElements.forEach(element => {
-        Prism.highlightElement(element);
+        try {
+          Prism.highlightElement(element);
+        } catch (error) {
+          console.warn('Prism highlighting failed for preview:', error);
+          // Fallback to plain text if highlighting fails
+          element.className = 'language-plaintext';
+        }
       });
     }
   }, [activePreviewTab, showPreview]);
@@ -170,7 +337,7 @@ function App() {
             if (data.message?.content) {
               const content = data.message.content;
               
-              // Check for code block markers
+              // Enhanced code block detection
               if (content.includes('```')) {
                 const codeBlockStart = content.indexOf('```');
                 const codeBlockEnd = content.lastIndexOf('```');
@@ -185,6 +352,7 @@ function App() {
                     const codeEnd = codeBlockEnd;
                     if (firstNewline !== -1 && codeEnd > firstNewline) {
                       const extractedCode = content.substring(firstNewline + 1, codeEnd);
+                      console.log('Extracted code block:', extractedCode.substring(0, 100) + '...');
                       setStreamingCode(extractedCode);
                       setCode(extractedCode);
                     }
@@ -205,6 +373,7 @@ function App() {
                   if (codeEnd !== -1) {
                     codeBlockContent += content.substring(0, codeEnd);
                   }
+                  console.log('Completed code block:', codeBlockContent.substring(0, 100) + '...');
                   setStreamingCode(codeBlockContent);
                   setCode(codeBlockContent);
                 }
@@ -213,10 +382,18 @@ function App() {
                 codeBlockContent += content;
                 setStreamingCode(codeBlockContent);
               } else {
-                // Regular text content
-                textContent += content;
-                setStreamingText(textContent);
-                setCurrentAssistantMessage(textContent);
+                // Check if this content looks like code even without code blocks
+                const extractedCode = extractAnyCode(content);
+                if (extractedCode) {
+                  console.log('Extracted code from text:', extractedCode.substring(0, 100) + '...');
+                  setStreamingCode(extractedCode);
+                  setCode(extractedCode);
+                } else {
+                  // Regular text content
+                  textContent += content;
+                  setStreamingText(textContent);
+                  setCurrentAssistantMessage(textContent);
+                }
               }
             }
           } catch (e) {
@@ -313,12 +490,13 @@ function App() {
   };
 
   const extractHtmlAndCss = (code) => {
-    if (!code) return { html: '', css: '' };
+    if (!code) return { html: '', css: '', react: '' };
     
     let htmlParts = [];
     let cssParts = [];
+    let reactParts = [];
     
-    // Common patterns for HTML and CSS extraction
+    // Comprehensive patterns for all types of code extraction
     const patterns = [
       // HTML patterns
       { regex: /```html\s*([\s\S]*?)```/gi, type: 'html' },
@@ -332,34 +510,112 @@ function App() {
       { regex: /```sass\s*([\s\S]*?)```/gi, type: 'css' },
       { regex: /```less\s*([\s\S]*?)```/gi, type: 'css' },
       
-      // JavaScript patterns (might contain HTML in template literals)
+      // JavaScript/TypeScript patterns
       { regex: /```javascript\s*([\s\S]*?)```/gi, type: 'js' },
-      { regex: /```js\s*([\s\S]*?)```/gi, type: 'js' }
+      { regex: /```js\s*([\s\S]*?)```/gi, type: 'js' },
+      { regex: /```typescript\s*([\s\S]*?)```/gi, type: 'js' },
+      { regex: /```ts\s*([\s\S]*?)```/gi, type: 'js' },
+      { regex: /```tsx\s*([\s\S]*?)```/gi, type: 'js' },
+      
+      // Python patterns
+      { regex: /```python\s*([\s\S]*?)```/gi, type: 'python' },
+      { regex: /```py\s*([\s\S]*?)```/gi, type: 'python' },
+      
+      // Java patterns
+      { regex: /```java\s*([\s\S]*?)```/gi, type: 'java' },
+      
+      // C/C++ patterns
+      { regex: /```c\s*([\s\S]*?)```/gi, type: 'c' },
+      { regex: /```cpp\s*([\s\S]*?)```/gi, type: 'cpp' },
+      { regex: /```c\+\+\s*([\s\S]*?)```/gi, type: 'cpp' },
+      
+      // Go patterns
+      { regex: /```go\s*([\s\S]*?)```/gi, type: 'go' },
+      
+      // Rust patterns
+      { regex: /```rust\s*([\s\S]*?)```/gi, type: 'rust' },
+      
+      // PHP patterns
+      { regex: /```php\s*([\s\S]*?)```/gi, type: 'php' },
+      
+      // Ruby patterns
+      { regex: /```ruby\s*([\s\S]*?)```/gi, type: 'ruby' },
+      
+      // Swift patterns
+      { regex: /```swift\s*([\s\S]*?)```/gi, type: 'swift' },
+      
+      // Kotlin patterns
+      { regex: /```kotlin\s*([\s\S]*?)```/gi, type: 'kotlin' },
+      
+      // SQL patterns
+      { regex: /```sql\s*([\s\S]*?)```/gi, type: 'sql' },
+      
+      // Shell/Bash patterns
+      { regex: /```bash\s*([\s\S]*?)```/gi, type: 'bash' },
+      { regex: /```shell\s*([\s\S]*?)```/gi, type: 'bash' },
+      { regex: /```sh\s*([\s\S]*?)```/gi, type: 'bash' },
+      
+      // JSON patterns
+      { regex: /```json\s*([\s\S]*?)```/gi, type: 'json' },
+      
+      // YAML patterns
+      { regex: /```yaml\s*([\s\S]*?)```/gi, type: 'yaml' },
+      { regex: /```yml\s*([\s\S]*?)```/gi, type: 'yaml' },
+      
+      // Markdown patterns
+      { regex: /```markdown\s*([\s\S]*?)```/gi, type: 'markdown' },
+      { regex: /```md\s*([\s\S]*?)```/gi, type: 'markdown' },
+      
+      // Generic code blocks (catch-all for any language not specifically listed)
+      { regex: /```(\w+)\s*([\s\S]*?)```/gi, type: 'generic' }
     ];
     
     // Extract content from code blocks
     patterns.forEach(pattern => {
       let match;
       while ((match = pattern.regex.exec(code)) !== null) {
-        const content = match[1].trim();
+        const content = match[1] || match[2]; // Handle both specific and generic patterns
+        const language = match[1] || 'text'; // For generic patterns, get the language
         
         if (pattern.type === 'html') {
           htmlParts.push(content);
         } else if (pattern.type === 'css') {
           cssParts.push(content);
         } else if (pattern.type === 'js') {
-          // Look for HTML in template literals or JSX-like content
-          const templateRegex = /`([\s\S]*?)`/g;
-          const jsxRegex = /<[^>]+>/g;
-          
-          if (content.includes('`') || content.match(jsxRegex)) {
-            // Extract HTML-like content from JavaScript
-            let templateMatch;
-            while ((templateMatch = templateRegex.exec(content)) !== null) {
-              const templateContent = templateMatch[1];
-              if (templateContent.includes('<') && templateContent.includes('>')) {
-                htmlParts.push(templateContent);
+          // Check if this is React/JSX code
+          if (content.includes('import React') || content.includes('export default') || 
+              content.includes('function') || content.includes('const') || 
+              content.includes('return') || content.includes('jsx') || 
+              content.includes('className') || content.includes('onClick')) {
+            reactParts.push(content);
+          } else {
+            // Look for HTML in template literals or JSX-like content
+            const templateRegex = /`([\s\S]*?)`/g;
+            const jsxRegex = /<[^>]+>/g;
+            
+            if (content.includes('`') || content.match(jsxRegex)) {
+              // Extract HTML-like content from JavaScript
+              let templateMatch;
+              while ((templateMatch = templateRegex.exec(content)) !== null) {
+                const templateContent = templateMatch[1];
+                if (templateContent.includes('<') && templateContent.includes('>')) {
+                  htmlParts.push(templateContent);
+                }
               }
+            }
+          }
+        } else if (pattern.type === 'generic') {
+          // For generic code blocks, add to appropriate category based on language
+          if (['html', 'xml', 'vue'].includes(language.toLowerCase())) {
+            htmlParts.push(content);
+          } else if (['css', 'scss', 'sass', 'less'].includes(language.toLowerCase())) {
+            cssParts.push(content);
+          } else if (['javascript', 'js', 'typescript', 'ts', 'tsx'].includes(language.toLowerCase())) {
+            if (content.includes('import React') || content.includes('export default') || 
+                content.includes('function') || content.includes('const') || 
+                content.includes('return') || content.includes('jsx') || 
+                content.includes('className') || content.includes('onClick')) {
+              reactParts.push(content);
             }
           }
         }
@@ -400,6 +656,7 @@ function App() {
     // Remove duplicates and clean up
     const uniqueHtml = [...new Set(htmlParts)].join('\n\n');
     const uniqueCss = [...new Set(cssParts)].join('\n\n');
+    const uniqueReact = [...new Set(reactParts)].join('\n\n');
     
     // If we have HTML but no CSS, try to extract CSS from the HTML
     let finalCss = uniqueCss;
@@ -417,23 +674,152 @@ function App() {
     
     return { 
       html: uniqueHtml.trim(), 
-      css: finalCss.trim() 
+      css: finalCss.trim(),
+      react: uniqueReact.trim()
     };
+  };
+
+  // Enhanced function to extract any code from the response
+  const extractAnyCode = (content) => {
+    if (!content) return '';
+    
+    // Look for any code block pattern
+    const codeBlockRegex = /```(?:\w+)?\s*([\s\S]*?)```/gi;
+    const matches = [];
+    let match;
+    
+    while ((match = codeBlockRegex.exec(content)) !== null) {
+      matches.push(match[1].trim());
+    }
+    
+    // If no code blocks found, check if the entire content looks like code
+    if (matches.length === 0) {
+      // Check for common code indicators
+      const codeIndicators = [
+        /function\s+\w+\s*\(/i,
+        /const\s+\w+\s*=/i,
+        /let\s+\w+\s*=/i,
+        /var\s+\w+\s*=/i,
+        /import\s+/i,
+        /export\s+/i,
+        /class\s+\w+/i,
+        /if\s*\(/i,
+        /for\s*\(/i,
+        /while\s*\(/i,
+        /return\s+/i,
+        /console\./i,
+        /<[^>]+>/i, // HTML tags
+        /[{}();]/i, // Code punctuation
+      ];
+      
+      const isCode = codeIndicators.some(indicator => indicator.test(content)) &&
+                    content.length > 20; // Minimum length to avoid false positives
+      
+      if (isCode) {
+        return content.trim();
+      }
+    }
+    
+    return matches.join('\n\n');
+  };
+
+  // Function to detect the language of the code
+  const detectLanguage = (code) => {
+    if (!code) return 'javascript';
+    
+    // Check for language hints in code blocks first
+    const languageMatch = code.match(/```(\w+)/);
+    if (languageMatch) {
+      const lang = languageMatch[1].toLowerCase();
+      // Only return supported languages
+      const supportedLanguages = ['javascript', 'js', 'jsx', 'typescript', 'ts', 'tsx', 'html', 'css', 'python', 'java', 'c', 'cpp', 'php', 'ruby', 'sql', 'bash', 'json', 'yaml', 'markup', 'xml'];
+      if (supportedLanguages.includes(lang)) {
+        return lang === 'js' ? 'javascript' : lang === 'ts' ? 'typescript' : lang;
+      }
+    }
+    
+    // Detect based on code content
+    if (code.includes('import React') || code.includes('export default') || 
+        code.includes('className') || code.includes('onClick') || 
+        code.includes('useState') || code.includes('useEffect')) {
+      return 'jsx';
+    }
+    
+    if (code.includes('def ') || code.includes('import ') || code.includes('print(') || 
+        code.includes('if __name__') || code.includes('class ') && code.includes(':')) {
+      return 'python';
+    }
+    
+    if (code.includes('public class') || code.includes('public static void') || 
+        code.includes('System.out.println') || code.includes('import java.')) {
+      return 'java';
+    }
+    
+    if (code.includes('#include') || code.includes('int main') || 
+        code.includes('printf') || code.includes('scanf')) {
+      return 'c';
+    }
+    
+    if (code.includes('#include') && (code.includes('iostream') || code.includes('vector') || 
+        code.includes('std::') || code.includes('cout') || code.includes('cin'))) {
+      return 'cpp';
+    }
+    
+    if (code.includes('<?php') || code.includes('echo ') || code.includes('$')) {
+      return 'php';
+    }
+    
+    if (code.includes('def ') && code.includes('end') || code.includes('puts ') || 
+        code.includes('require ') || code.includes('module ')) {
+      return 'ruby';
+    }
+    
+    if (code.includes('SELECT ') || code.includes('INSERT ') || code.includes('UPDATE ') || 
+        code.includes('DELETE ') || code.includes('CREATE TABLE')) {
+      return 'sql';
+    }
+    
+    if (code.includes('#!/bin/bash') || code.includes('echo ') || code.includes('$') || 
+        code.includes('if [') || code.includes('for ') && code.includes('in ')) {
+      return 'bash';
+    }
+    
+    if (code.includes('"') && code.includes(':') && code.includes('{') && code.includes('}')) {
+      return 'json';
+    }
+    
+    if (code.includes(':') && (code.includes('- ') || code.includes('---'))) {
+      return 'yaml';
+    }
+    
+    if (code.includes('<html') || code.includes('<div') || code.includes('<body')) {
+      return 'markup';
+    }
+    
+    if (code.includes('{') && code.includes('}') && code.includes(':')) {
+      return 'css';
+    }
+    
+    // Default to JavaScript
+    return 'javascript';
   };
 
   const updatePreview = () => {
     const currentCode = isStreaming ? streamingCode : code;
     if (currentCode) {
-      const { html, css } = extractHtmlAndCss(currentCode);
+      const { html, css, react } = extractHtmlAndCss(currentCode);
       console.log('=== Preview Extraction Debug ===');
       console.log('Original code length:', currentCode.length);
       console.log('Extracted HTML length:', html.length);
       console.log('Extracted CSS length:', css.length);
+      console.log('Extracted React length:', react.length);
       console.log('HTML preview:', html.substring(0, 200) + (html.length > 200 ? '...' : ''));
       console.log('CSS preview:', css.substring(0, 200) + (css.length > 200 ? '...' : ''));
+      console.log('React preview:', react.substring(0, 200) + (react.length > 200 ? '...' : ''));
       console.log('================================');
       setPreviewHtml(html);
       setPreviewCss(css);
+      setPreviewReact(react);
     }
   };
 
@@ -517,7 +903,7 @@ function App() {
             if (data.message?.content) {
               const content = data.message.content;
               
-              // Check for code block markers
+              // Enhanced code block detection
               if (content.includes('```')) {
                 const codeBlockStart = content.indexOf('```');
                 const codeBlockEnd = content.lastIndexOf('```');
@@ -560,10 +946,17 @@ function App() {
                 codeBlockContent += content;
                 setStreamingCode(codeBlockContent);
               } else {
-                // Regular text content
-                textContent += content;
-                setStreamingText(textContent);
-                setCurrentAssistantMessage(textContent);
+                // Check if this content looks like code even without code blocks
+                const extractedCode = extractAnyCode(content);
+                if (extractedCode) {
+                  setStreamingCode(extractedCode);
+                  setCode(extractedCode);
+                } else {
+                  // Regular text content
+                  textContent += content;
+                  setStreamingText(textContent);
+                  setCurrentAssistantMessage(textContent);
+                }
               }
             }
           } catch (e) {
@@ -671,8 +1064,8 @@ function App() {
                         </div>
                       </div>
                     ) : (
-                      <div className="message-content">
-                        {msg.content.split('\n').map((line, i) => <p key={i}>{line}</p>)}
+                      <div>
+                        <MessageContent content={msg.content} />
                         {editedMessages.has(idx) && (
                           <span className="edited-indicator">(edited)</span>
                         )}
@@ -693,9 +1086,7 @@ function App() {
               {isLoading && (
                 <div className="message assistant">
                   {currentAssistantMessage ? (
-                    <div className="message-content streaming">
-                      {currentAssistantMessage.split('\n').map((line, i) => <p key={i}>{line}</p>)}
-                    </div>
+                    <MessageContent content={currentAssistantMessage} isStreaming={true} />
                   ) : (
                     <div className="typing-indicator"><span>●</span><span>●</span><span>●</span></div>
                   )}
@@ -728,6 +1119,18 @@ function App() {
             <div className="code-toolbar">
               <span>
                 Code preview
+                {(isStreaming ? streamingCode : code) && (
+                  <span style={{ color: '#888', marginLeft: '8px', fontSize: '0.9em' }}>
+                    ({(() => {
+                      try {
+                        return detectLanguage(isStreaming ? streamingCode : code);
+                      } catch (error) {
+                        console.warn('Language detection failed:', error);
+                        return 'javascript';
+                      }
+                    })()})
+                  </span>
+                )}
                 {isStreaming && <span style={{ color: '#00ff00', marginLeft: '8px' }}>● Live</span>}
                 {wasStopped && <span style={{ color: '#ffc107', marginLeft: '8px' }}>● Stopped</span>}
               </span>
@@ -810,11 +1213,23 @@ function App() {
                     >
                       CSS {previewCss && <span className="content-indicator">●</span>}
                     </button>
+                    <button 
+                      className={`preview-tab ${activePreviewTab === 'react' ? 'active' : ''}`}
+                      onClick={() => handlePreviewTabChange('react')}
+                    >
+                      React {previewReact && <span className="content-indicator">●</span>}
+                    </button>
                   </div>
                   <div className="preview-content">
                     {activePreviewTab === 'preview' && (
                       <div className="preview-placeholder">
                         <p>Live preview is shown above</p>
+                        {previewReact && (
+                          <div className="react-notice">
+                            <p>⚠️ React components detected. Live preview shows HTML/CSS only.</p>
+                            <p>Check the React tab to view the component code.</p>
+                          </div>
+                        )}
                       </div>
                     )}
                     {activePreviewTab === 'html' && (
@@ -823,11 +1238,30 @@ function App() {
                     {activePreviewTab === 'css' && (
                       <pre><code className="language-css">{previewCss || 'No CSS found'}</code></pre>
                     )}
+                    {activePreviewTab === 'react' && (
+                      <div>
+                        {previewReact ? (
+                          <pre><code className="language-jsx">{previewReact}</code></pre>
+                        ) : (
+                          <div className="preview-placeholder">
+                            <p>No React/JSX code found</p>
+                            <p>Try asking the AI to generate React components</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             ) : (
-              <pre><code className={`language-javascript ${isStreaming ? 'streaming' : ''}`}>{isStreaming ? streamingCode : code}</code></pre>
+              <pre><code className={`language-${(() => {
+                try {
+                  return detectLanguage(isStreaming ? streamingCode : code);
+                } catch (error) {
+                  console.warn('Language detection failed:', error);
+                  return 'javascript';
+                }
+              })()} ${isStreaming ? 'streaming' : ''}`}>{isStreaming ? streamingCode : code}</code></pre>
             )}
           </div>
         </div>

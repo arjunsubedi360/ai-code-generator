@@ -24,11 +24,15 @@ function App() {
   const [modelList, setModelList] = useState([]);
   const [code, setCode] = useState(SAMPLE_CODE);
   const [copied, setCopied] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingCode, setStreamingCode] = useState('');
+  const [streamingText, setStreamingText] = useState('');
+  const [currentAssistantMessage, setCurrentAssistantMessage] = useState('');
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     Prism.highlightAll();
-  }, [code]);
+  }, [code, streamingCode]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -84,6 +88,15 @@ function App() {
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    setIsStreaming(true);
+    
+    // Reset streaming states
+    setStreamingCode('');
+    setStreamingText('');
+    setCurrentAssistantMessage('');
+    
+    // Add a small delay to show the typing indicator briefly
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
       const response = await fetch(`${ollamaUrl}/api/chat`, {
@@ -92,37 +105,109 @@ function App() {
         body: JSON.stringify({
           model: modelName,
           messages: [...messages, userMessage],
-          stream: false,
+          stream: true,
           options: { temperature: 0.7, top_p: 0.9, repeat_penalty: 1.1 }
         })
       });
 
       if (!response.ok) throw new Error(`Error: ${response.status}`);
-      const data = await response.json();
-      const rawContent = data.message?.content || 'No response';
 
-      const codeRegex = /```(?:\w+)?\n([\s\S]*?)```/g;
-      let codeBlocks = [];
-      let textOnly = rawContent;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let inCodeBlock = false;
+      let codeBlockContent = '';
+      let textContent = '';
 
-      let match;
-      while ((match = codeRegex.exec(rawContent)) !== null) {
-        codeBlocks.push(match[1].trim());
-        textOnly = textOnly.replace(match[0], '').trim();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          
+          try {
+            const data = JSON.parse(line);
+            if (data.message?.content) {
+              const content = data.message.content;
+              
+              // Check for code block markers
+              if (content.includes('```')) {
+                const codeBlockStart = content.indexOf('```');
+                const codeBlockEnd = content.lastIndexOf('```');
+                
+                if (!inCodeBlock) {
+                  // Starting a code block
+                  if (codeBlockStart !== codeBlockEnd) {
+                    // Code block starts and ends in same chunk
+                    inCodeBlock = false;
+                    const codeStart = codeBlockStart + 3;
+                    const firstNewline = content.indexOf('\n', codeStart);
+                    const codeEnd = codeBlockEnd;
+                    if (firstNewline !== -1 && codeEnd > firstNewline) {
+                      const extractedCode = content.substring(firstNewline + 1, codeEnd);
+                      setStreamingCode(extractedCode);
+                      setCode(extractedCode);
+                    }
+                  } else {
+                    // Code block starts
+                    inCodeBlock = true;
+                    codeBlockContent = '';
+                    const codeStart = codeBlockStart + 3;
+                    const firstNewline = content.indexOf('\n', codeStart);
+                    if (firstNewline !== -1) {
+                      codeBlockContent = content.substring(firstNewline + 1);
+                    }
+                  }
+                } else {
+                  // Ending a code block
+                  inCodeBlock = false;
+                  const codeEnd = codeBlockEnd;
+                  if (codeEnd !== -1) {
+                    codeBlockContent += content.substring(0, codeEnd);
+                  }
+                  setStreamingCode(codeBlockContent);
+                  setCode(codeBlockContent);
+                }
+              } else if (inCodeBlock) {
+                // Inside a code block
+                codeBlockContent += content;
+                setStreamingCode(codeBlockContent);
+              } else {
+                // Regular text content
+                textContent += content;
+                setStreamingText(textContent);
+                setCurrentAssistantMessage(textContent);
+              }
+            }
+          } catch (e) {
+            // Skip invalid JSON lines
+            continue;
+          }
+        }
       }
 
-      if (textOnly) {
-        setMessages((prev) => [...prev, { role: 'assistant', content: textOnly }]);
+      // Finalize the response
+      if (textContent.trim()) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: textContent.trim() }]);
       }
-
-      if (codeBlocks.length > 0) {
-        setCode(codeBlocks.join('\n\n'));
+      
+      if (codeBlockContent.trim()) {
+        setCode(codeBlockContent.trim());
       }
 
     } catch (err) {
       setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
+      setStreamingCode('');
+      setStreamingText('');
+      setCurrentAssistantMessage('');
     }
   };
 
@@ -141,7 +226,8 @@ function App() {
   };
 
   const copyCode = () => {
-    navigator.clipboard.writeText(code)
+    const codeToCopy = isStreaming ? streamingCode : code;
+    navigator.clipboard.writeText(codeToCopy)
       .then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
@@ -200,7 +286,13 @@ function App() {
               )}
               {isLoading && (
                 <div className="message assistant">
-                  <div className="typing-indicator"><span>●</span><span>●</span><span>●</span></div>
+                  {currentAssistantMessage ? (
+                    <div className="message-content streaming">
+                      {currentAssistantMessage.split('\n').map((line, i) => <p key={i}>{line}</p>)}
+                    </div>
+                  ) : (
+                    <div className="typing-indicator"><span>●</span><span>●</span><span>●</span></div>
+                  )}
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -220,12 +312,15 @@ function App() {
 
           <div className="resizer" />
 
-          <div className="code-panel resizable-panel right-panel">
+          <div className={`code-panel resizable-panel right-panel ${isStreaming ? 'streaming' : ''}`}>
             <div className="code-toolbar">
-              <span>Code preview</span>
+              <span>
+                Code preview
+                {isStreaming && <span style={{ color: '#00ff00', marginLeft: '8px' }}>● Live</span>}
+              </span>
               <button onClick={copyCode}>{copied ? 'Copied!' : 'Copy'}</button>
             </div>
-            <pre><code className="language-javascript">{code}</code></pre>
+            <pre><code className={`language-javascript ${isStreaming ? 'streaming' : ''}`}>{isStreaming ? streamingCode : code}</code></pre>
           </div>
         </div>
       </div>

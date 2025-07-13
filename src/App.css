@@ -283,6 +283,60 @@ body {
   flex: 1;
 }
 
+/* Streaming indicator */
+.code-panel.streaming {
+  position: relative;
+}
+
+.code-panel.streaming::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #00ff00, #00cc00, #009900);
+  animation: streaming-pulse 2s ease-in-out infinite;
+}
+
+@keyframes streaming-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Streaming text animation */
+.message.assistant .message-content {
+  position: relative;
+}
+
+.message.assistant .message-content.streaming::after {
+  content: '|';
+  animation: cursor-blink 1s infinite;
+  color: #2188ff;
+  font-weight: bold;
+}
+
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Code syntax highlighting improvements */
+.code-panel pre code {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Streaming code fade-in effect */
+.code-panel pre code.streaming {
+  animation: code-fade-in 0.3s ease-in;
+}
+
+@keyframes code-fade-in {
+  from { opacity: 0.8; }
+  to { opacity: 1; }
+}
+
 /* Optional scrollbar style */
 .code-panel::-webkit-scrollbar {
   width: 8px;
